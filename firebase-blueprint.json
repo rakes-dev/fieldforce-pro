@@ -1,0 +1,118 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents an employee or admin in the system.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "mobile": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "employee"] },
+        "homeLat": { "type": "number" },
+        "homeLng": { "type": "number" },
+        "territory": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role", "status"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Logs employee attendance and movement.",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "checkInTime": { "type": "string", "format": "date-time" },
+        "checkOutTime": { "type": "string", "format": "date-time" },
+        "checkInLat": { "type": "number" },
+        "checkInLng": { "type": "number" },
+        "routeData": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "lat": { "type": "number" },
+              "lng": { "type": "number" },
+              "timestamp": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      },
+      "required": ["employeeId", "checkInTime"]
+    },
+    "Shop": {
+      "title": "Shop",
+      "description": "Registered shops in the system.",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "shopName": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "pincode": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "selfieWithShopImage": { "type": "string", "description": "URL to employee selfie with shop" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["shopName", "ownerName", "latitude", "longitude"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Sales orders captured by employees.",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "shopId": { "type": "string" },
+        "shopName": { "type": "string" },
+        "orderTotal": { "type": "number" },
+        "geoLat": { "type": "number" },
+        "geoLng": { "type": "number" },
+        "visitSelfieUrl": { "type": "string", "description": "Mandatory selfie for first visit of the day" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productName": { "type": "string" },
+              "quantity": { "type": "number" },
+              "price": { "type": "number" }
+            }
+          }
+        }
+      },
+      "required": ["employeeId", "shopId", "orderTotal", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Employee attendance logs"
+    },
+    "/shops/{shopId}": {
+      "schema": "Shop",
+      "description": "Shop registry"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Sales orders"
+    },
+    "/admins/{adminId}": {
+      "schema": { "type": "object", "properties": { "role": { "type": "string" } } },
+      "description": "Admin white-list for RBAC"
+    }
+  }
+}

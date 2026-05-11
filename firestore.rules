@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'rakesh.sardar.12@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isVerifiedOrAdmin() {
+      return isSignedIn() || isAdmin();
+    }
+
+    // --- Global Admin Override ---
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    function isSameUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'email', 'role', 'status', 'createdAt'])
+        && data.name is string && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 100
+        && data.role in ['admin', 'employee']
+        && data.status in ['active', 'suspended']
+        && data.createdAt is timestamp
+        && (!('mobile' in data) || (data.mobile is string && data.mobile.size() <= 20))
+        && (!('updatedAt' in data) || data.updatedAt is timestamp)
+        && (!('homeLat' in data) || data.homeLat is number)
+        && (!('homeLng' in data) || data.homeLng is number);
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['employeeId', 'checkInTime'])
+        && data.employeeId == request.auth.uid
+        && data.checkInTime is timestamp
+        && data.employeeId is string && data.employeeId.size() <= 128
+        && (!('checkInLat' in data) || data.checkInLat is number)
+        && (!('checkInLng' in data) || data.checkInLng is number)
+        && (!('routeData' in data) || (data.routeData is list && data.routeData.size() <= 2000))
+        && (!('checkOutTime' in data) || data.checkOutTime is timestamp);
+    }
+
+    function isValidShop(data) {
+      return data.keys().hasAll(['shopName', 'ownerName', 'latitude', 'longitude', 'employeeId', 'status', 'createdAt', 'selfieWithShopImage'])
+        && data.employeeId == request.auth.uid
+        && data.shopName is string && data.shopName.size() <= 200
+        && data.ownerName is string && data.ownerName.size() <= 100
+        && data.latitude is number
+        && data.longitude is number
+        && data.status in ['pending', 'approved']
+        && data.createdAt is timestamp
+        && data.selfieWithShopImage is string;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['employeeId', 'shopId', 'timestamp', 'status'])
+        && data.employeeId == request.auth.uid
+        && data.shopId is string
+        && data.timestamp is timestamp
+        && data.status in ['pending', 'approved', 'rejected', 'confirmed', 'delivered', 'cancelled']
+        && (!('shopName' in data) || data.shopName is string)
+        && (!('visitSelfieUrl' in data) || data.visitSelfieUrl is string)
+        && (!('orderTotal' in data) || data.orderTotal is number);
+    }
+
+    // --- Match Blocks ---
+
+    match /users/{userId} {
+      allow get: if (isSameUser(userId) && isValidId(userId)) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if (isSameUser(userId) && isValidUser(request.resource.data)) || isAdmin();
+      allow update: if (isAdmin() && isValidId(userId)) || (
+        isSameUser(userId) && 
+        isValidId(userId) && 
+        isValidUser(request.resource.data) && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'mobile', 'homeLat', 'homeLng', 'updatedAt', 'role']) &&
+        (request.resource.data.role == resource.data.role) // Prevent self-elevation
+      );
+    }
+
+    match /attendance/{atId} {
+      allow get: if isAdmin() || (isSignedIn() && resource.data.employeeId == request.auth.uid && isValidId(atId));
+      allow list: if isAdmin() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create: if isSignedIn() && isValidAttendance(request.resource.data) && isValidId(atId);
+      allow update: if isSignedIn() && isValidId(atId) && resource.data.employeeId == request.auth.uid && (
+        // Action: Check Out
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkOutTime']) && request.resource.data.checkOutTime is timestamp) ||
+        // Action: Log Movement
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['routeData']) && request.resource.data.routeData is list)
+      );
+    }
+
+    match /shops/{shopId} {
+      allow get: if isSignedIn() && isValidId(shopId);
+      allow list: if isAdmin();
+      allow list: if isSignedIn() && (resource.data.employeeId == request.auth.uid || resource.data.status == 'approved');
+      allow create: if isVerifiedOrAdmin() && isValidShop(request.resource.data) && isValidId(shopId);
+      allow update: if (isAdmin() && isValidId(shopId)) || (isVerifiedOrAdmin() && isValidId(shopId) && resource.data.employeeId == request.auth.uid 
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['shopName', 'ownerName', 'phone', 'address', 'category']));
+    }
+
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && (isAdmin() || resource.data.employeeId == request.auth.uid) && isValidId(orderId);
+      allow list: if isAdmin();
+      allow list: if isSignedIn() && resource.data.employeeId == request.auth.uid;
+      allow create: if isVerifiedOrAdmin() && isValidOrder(request.resource.data) && isValidId(orderId);
+      allow update: if isAdmin() || (
+        isVerifiedOrAdmin() && 
+        isValidId(orderId) && 
+        resource.data.employeeId == request.auth.uid && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['orderTotal', 'updatedAt', 'visitSelfieUrl'])
+      );
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.token.email.lower() == 'rakesh.sardar.12@gmail.com';
+      allow delete: if isAdmin();
+    }
+  }
+}

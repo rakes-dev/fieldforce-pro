@@ -1,0 +1,15 @@
+{
+  "name": "FieldForce Pro",
+  "description": "A comprehensive field sales workforce management system with geofencing attendance, live tracking, shop visits, and order management.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "real-time_tracking",
+    "geofencing",
+    "image_capture",
+    "analytics_dashboard"
+  ]
+}
