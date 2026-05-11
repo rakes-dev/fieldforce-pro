@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType, getFirebaseConfig } from '../../lib/firebase';
 import { 
   collection, 
   query, 
@@ -20,7 +20,6 @@ import {
   getAuth
 } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
-import firebaseConfig from '../../../firebase-applet-config.json';
 import { UserCircle, MapPin, CheckCircle, XCircle, Search, MoreVertical, Plus, X, Phone, Mail, Map as MapIcon, Trash2, Navigation, Eye, EyeOff } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MapView } from '../../components/MapView';
@@ -68,7 +67,7 @@ export default function AdminEmployees() {
     setSubmitting(true);
     
     // Initialize a temporary app to create the user without logging out the admin
-    const tempApp = initializeApp(firebaseConfig, `temp-${Date.now()}`);
+    const tempApp = initializeApp(getFirebaseConfig(), `temp-${Date.now()}`);
     const tempAuth = getAuth(tempApp);
     
     try {
