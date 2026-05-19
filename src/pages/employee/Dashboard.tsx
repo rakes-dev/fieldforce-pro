@@ -27,6 +27,7 @@ export default function EmployeeDashboard() {
   const [stats, setStats] = useState({ visits: 0, orders: 0, totalAmount: 0 });
   const [loading, setLoading] = useState(true);
   const [isEndingSession, setIsEndingSession] = useState(false);
+  const [isConfirmingEnd, setIsConfirmingEnd] = useState(false);
 
   const handleEndSession = async () => {
     if (!attendance?.id) {
@@ -34,11 +35,10 @@ export default function EmployeeDashboard() {
       return;
     }
     
-    console.log("Dashboard: Triggering end session for ID:", attendance.id);
     setIsEndingSession(true);
     try {
       await checkOut(attendance.id);
-      console.log("Dashboard: Session ended successfully");
+      setIsConfirmingEnd(false);
     } catch (error: any) {
       console.error("Dashboard: End session failed:", error);
       alert("Failed to end session: " + (error.message || "Unknown error"));
@@ -142,6 +142,49 @@ export default function EmployeeDashboard() {
         </div>
       </div>
 
+      {/* Daily Session Status */}
+      <div className="card p-6 bg-gradient-to-br from-slate-900 to-slate-800 text-white border-0 overflow-hidden relative group">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-accent/20 transition-all duration-500" />
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div className="flex items-center gap-4">
+            <div className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-colors",
+              isCheckedIn ? "bg-emerald-500 shadow-emerald-500/20" : "bg-amber-500 shadow-amber-500/20"
+            )}>
+              {isCheckedIn ? <Clock className="w-6 h-6 text-white" /> : <AlertCircle className="w-6 h-6 text-white" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold tracking-tight">
+                  {isCheckedIn ? "Session Active" : "No Active Session"}
+                </h3>
+                {isCheckedIn && (
+                  <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">
+                    Tracking
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-400 text-xs font-medium">
+                {isCheckedIn 
+                  ? `Logged in at ${attendance?.checkInTime?.toDate?.()?.toLocaleTimeString() || "..."}`
+                  : "Automatic check-in will trigger once you leave your home base."}
+              </p>
+            </div>
+          </div>
+
+          {isCheckedIn && (
+            <button 
+              onClick={() => setIsConfirmingEnd(true)}
+              className="px-6 py-3 bg-white/10 hover:bg-white text-white hover:text-slate-900 rounded-xl font-bold text-xs uppercase tracking-widest transition-all backdrop-blur-md flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              End Session
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {cards.map((card, i) => (
@@ -198,6 +241,44 @@ export default function EmployeeDashboard() {
           <ActionBtn to="/employee/orders" icon={ShoppingBag} label="Orders" />
         </div>
       </div>
+      {/* Session End Confirmation Modal */}
+      {isConfirmingEnd && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-[32px] w-full max-w-sm shadow-2xl p-8 space-y-6 text-center"
+          >
+            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600 mb-2">
+              <AlertCircle className="w-10 h-10" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">End Work Session?</h3>
+              <p className="text-sm text-slate-500 font-medium">
+                This will finalize your attendance log for today. You won't be able to log more visits or orders automatically.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={handleEndSession}
+                disabled={isEndingSession}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 disabled:opacity-50 transition-all"
+              >
+                {isEndingSession ? <RefreshCw className="w-5 h-5 animate-spin" /> : "Yes, End Session"}
+              </button>
+              <button 
+                onClick={() => setIsConfirmingEnd(false)}
+                disabled={isEndingSession}
+                className="w-full py-3 text-slate-400 text-xs font-black uppercase tracking-widest hover:text-slate-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
