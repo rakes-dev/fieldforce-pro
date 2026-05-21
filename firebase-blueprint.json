@@ -58,7 +58,6 @@
         "latitude": { "type": "number" },
         "longitude": { "type": "number" },
         "selfieWithShopImage": { "type": "string", "description": "URL to employee selfie with shop" },
-        "category": { "type": "string" },
         "status": { "type": "string", "enum": ["pending", "approved"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },

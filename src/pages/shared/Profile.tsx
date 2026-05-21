@@ -444,11 +444,18 @@ export default function Profile() {
                 <div className="flex items-center justify-between mb-2 relative z-10">
                   <h4 className="text-lg font-bold">Tracking Information</h4>
                   <button 
+                    disabled={!!profile?.homeLat}
                     onClick={() => setIsGeoModalOpen(true)}
-                    className="px-3 py-1.5 bg-white text-black border border-white/20 rounded-lg text-xs font-bold transition-all flex items-center gap-2"
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 font-sans",
+                      profile?.homeLat 
+                        ? "bg-zinc-800 text-zinc-500 border border-zinc-700/50 cursor-not-allowed opacity-50"
+                        : "bg-white text-black border border-white/20 hover:bg-zinc-100"
+                    )}
+                    title={profile?.homeLat ? "Home base registered and locked" : "Set Home"}
                   >
                     <MapPin className="w-3 h-3" />
-                    Set Home
+                    {profile?.homeLat ? "Home Locked" : "Set Home"}
                   </button>
                 </div>
                 <p className="text-sm text-slate-400 mb-6 relative z-10 max-w-md">
@@ -474,9 +481,9 @@ export default function Profile() {
 
       {/* Personal Details Modal */}
       {isDetailsModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
               <h3 className="font-black text-xl text-slate-900 tracking-tight">Edit Identity</h3>
               <button 
                 onClick={() => setIsDetailsModalOpen(false)}
@@ -485,7 +492,7 @@ export default function Profile() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleUpdate} className="p-8 space-y-6">
+            <form onSubmit={handleUpdate} className="flex-1 overflow-y-auto p-8 space-y-6 pb-40">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Display Name</label>
@@ -536,9 +543,9 @@ export default function Profile() {
 
       {/* Security Modal */}
       {isSecurityModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
               <h3 className="font-black text-xl text-slate-900 tracking-tight">Access Control</h3>
               <button 
                 onClick={() => setIsSecurityModalOpen(false)}
@@ -547,7 +554,7 @@ export default function Profile() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleChangePassword} className="p-8 space-y-6">
+            <form onSubmit={handleChangePassword} className="flex-1 overflow-y-auto p-8 space-y-6 pb-40">
               {passError && (
                 <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-[10px] font-black uppercase rounded-xl flex items-center gap-2">
                   <AlertCircle className="w-3.5 h-3.5" />
@@ -614,9 +621,9 @@ export default function Profile() {
 
       {/* Geofence Registration Modal */}
       {isGeoModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-black text-xl text-slate-900 tracking-tight">Geofence Registry</h3>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Satellite-Verified Home Base</p>
@@ -629,7 +636,7 @@ export default function Profile() {
               </button>
             </div>
             
-            <div className="flex flex-col">
+            <div className="flex-1 overflow-y-auto pb-40">
               <div className="h-[300px] relative bg-slate-100">
                 {currentPos ? (
                   <MapView 

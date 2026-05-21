@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { db, handleFirestoreError, OperationType, getFirebaseConfig } from '../../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { 
   collection, 
   query, 
@@ -11,7 +11,8 @@ import {
   serverTimestamp, 
   deleteDoc, 
   where,
-  setDoc
+  setDoc,
+  onSnapshot
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword, 
@@ -20,6 +21,7 @@ import {
   getAuth
 } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
+import firebaseConfig from '../../../firebase-applet-config.json';
 import { UserCircle, MapPin, CheckCircle, XCircle, Search, MoreVertical, Plus, X, Phone, Mail, Map as MapIcon, Trash2, Navigation, Eye, EyeOff } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MapView } from '../../components/MapView';
@@ -32,6 +34,8 @@ export default function AdminEmployees() {
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [locationModalData, setLocationModalData] = useState<any>(null);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   
@@ -40,26 +44,34 @@ export default function AdminEmployees() {
     name: '',
     email: '',
     password: '',
+    mobile: '',
     role: 'employee',
     territory: '',
     status: 'active'
+  });
+
+  const [editForm, setEditForm] = useState({
+    name: '',
+    mobile: '',
+    territory: '',
+    role: '',
+    status: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        const q = query(collection(db, 'users'), where('role', '==', 'employee'));
-        const snap = await getDocs(q);
-        setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'users');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchEmployees();
+    // Real-time listener for all users (admins and employees)
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleAddEmployee = async (e: React.FormEvent) => {
@@ -67,7 +79,7 @@ export default function AdminEmployees() {
     setSubmitting(true);
     
     // Initialize a temporary app to create the user without logging out the admin
-    const tempApp = initializeApp(getFirebaseConfig(), `temp-${Date.now()}`);
+    const tempApp = initializeApp(firebaseConfig, `temp-${Date.now()}`);
     const tempAuth = getAuth(tempApp);
     
     try {
@@ -80,25 +92,27 @@ export default function AdminEmployees() {
       await setDoc(doc(db, 'users', uid), {
         name: newEmployee.name,
         email: newEmployee.email,
+        mobile: newEmployee.mobile || '',
         role: newEmployee.role,
         territory: newEmployee.territory,
         status: newEmployee.status,
         createdAt: serverTimestamp(),
       });
+
+      // 3. If admin, add to admins collection for security rules
+      if (newEmployee.role === 'admin') {
+        await setDoc(doc(db, 'admins', uid), { role: 'admin' });
+      }
       
-      // 3. Cleanup temp auth
+      // 4. Cleanup temp auth
       await authSignOut(tempAuth);
-      
-      // Refresh list
-      const q = query(collection(db, 'users'), where('role', '==', 'employee'));
-      const snap = await getDocs(q);
-      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       
       setIsAddModalOpen(false);
       setNewEmployee({
         name: '',
         email: '',
         password: '',
+        mobile: '',
         role: 'employee',
         territory: '',
         status: 'active'
@@ -132,9 +146,62 @@ export default function AdminEmployees() {
     }
   };
 
+  const handleEditClick = (emp: any) => {
+    setEditingEmployee(emp);
+    setEditForm({
+      name: emp.name || '',
+      mobile: emp.mobile || '',
+      territory: emp.territory || '',
+      role: emp.role || 'employee',
+      status: emp.status || 'active'
+    });
+    setIsEditModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEmployee) return;
+    setSubmitting(true);
+    try {
+      await updateDoc(doc(db, 'users', editingEmployee.id), {
+        name: editForm.name,
+        mobile: editForm.mobile || '',
+        territory: editForm.territory,
+        role: editForm.role,
+        status: editForm.status
+      });
+
+      // Handle admin collection sync
+      const adminDocRef = doc(db, 'admins', editingEmployee.id);
+      if (editForm.role === 'admin') {
+        await setDoc(adminDocRef, { role: 'admin' });
+      } else {
+        // If they were previously an admin and are now downgraded
+        try {
+          await deleteDoc(adminDocRef);
+        } catch (e) {
+          // Might not exist or permission denied if they weren't an admin
+        }
+      }
+      
+      setEmployees(employees.map(emp => 
+        emp.id === editingEmployee.id ? { ...emp, ...editForm } : emp
+      ));
+      
+      setIsEditModalOpen(false);
+      setEditingEmployee(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${editingEmployee.id}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const filtered = employees.filter(e => 
-    (e.name || '').toLowerCase().includes(search.toLowerCase()) || 
-    (e.email || '').toLowerCase().includes(search.toLowerCase())
+    e.role === 'employee' &&
+    ((e.name || '').toLowerCase().includes(search.toLowerCase()) || 
+     (e.email || '').toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
@@ -193,7 +260,9 @@ export default function AdminEmployees() {
                       </div>
                       <div>
                         <p className="font-semibold text-sm text-zinc-900">{emp.name}</p>
-                        <p className="text-xs text-zinc-500">{emp.email}</p>
+                        <p className="text-xs text-zinc-500">
+                          {emp.email} {emp.mobile && <span className="text-slate-400 font-medium">• {emp.mobile}</span>}
+                        </p>
                       </div>
                     </div>
                   </td>
@@ -247,6 +316,13 @@ export default function AdminEmployees() {
                             />
                             <div className="absolute right-0 mt-2 w-48 bg-white border border-zinc-100 rounded-xl shadow-xl z-20 overflow-hidden py-1">
                               <button 
+                                onClick={() => handleEditClick(emp)}
+                                className="w-full px-4 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <UserCircle className="w-3.5 h-3.5" />
+                                Edit Details
+                              </button>
+                              <button 
                                 onClick={() => navigate(`/admin/tracking?userId=${emp.id}`)}
                                 className="w-full px-4 py-2 text-left text-xs font-bold text-blue-600 hover:bg-blue-50 flex items-center gap-2"
                               >
@@ -295,11 +371,136 @@ export default function AdminEmployees() {
         </div>
       </div>
 
+      {/* Edit Employee Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-zinc-100 flex items-center justify-between shrink-0">
+              <h3 className="font-black text-xl text-zinc-900">Modify Force Details</h3>
+              <button 
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-zinc-400" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleUpdateEmployee} className="flex-1 overflow-y-auto p-6 space-y-6 pb-40">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Full Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                    placeholder="Enter employee name"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                  />
+                </div>
+                
+                <div className="space-y-2 opacity-50">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Email Address (Read Only)</label>
+                  <input 
+                    type="email" 
+                    disabled
+                    className="w-full px-4 py-2.5 bg-zinc-100 border border-zinc-100 rounded-xl outline-none font-medium text-sm"
+                    value={editingEmployee?.email}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Mobile Number</label>
+                  <input 
+                    type="tel" 
+                    className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                    placeholder="e.g. 9876543210"
+                    value={editForm.mobile}
+                    onChange={(e) => setEditForm({...editForm, mobile: e.target.value})}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                   <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Employee Status</label>
+                    <div className="flex bg-zinc-50 p-1 rounded-xl border border-zinc-100">
+                      {['active', 'suspended'].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setEditForm({...editForm, status})}
+                          className={cn(
+                            "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                            editForm.status === status 
+                              ? "bg-white shadow-sm text-zinc-900" 
+                              : "text-zinc-400 hover:text-zinc-500"
+                          )}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Territory</label>
+                    <select 
+                      className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all appearance-none"
+                      value={editForm.territory}
+                      onChange={(e) => setEditForm({...editForm, territory: e.target.value})}
+                    >
+                      <option value="">Unassigned</option>
+                      <option value="North Zone">North Zone</option>
+                      <option value="South Zone">South Zone</option>
+                      <option value="East Zone">East Zone</option>
+                      <option value="West Zone">West Zone</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Role</label>
+                    <select 
+                      className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all appearance-none"
+                      value={editForm.role}
+                      onChange={(e) => setEditForm({...editForm, role: e.target.value})}
+                    >
+                      <option value="employee">Field Agent</option>
+                      <option value="admin">Administrator</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 py-3 font-bold text-zinc-500 hover:bg-zinc-50 rounded-xl transition-colors border border-zinc-100 text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-3 bg-zinc-900 text-white font-bold rounded-xl shadow-lg shadow-zinc-900/25 hover:bg-zinc-800 disabled:opacity-50 transition-all text-sm flex items-center justify-center gap-2"
+                >
+                  {submitting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : <CheckCircle className="w-4 h-4" />}
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add Employee Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
+        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-zinc-100 flex items-center justify-between shrink-0">
               <h3 className="font-black text-xl text-zinc-900">Add New Force</h3>
               <button 
                 onClick={() => setIsAddModalOpen(false)}
@@ -309,7 +510,7 @@ export default function AdminEmployees() {
               </button>
             </div>
             
-            <form onSubmit={handleAddEmployee} className="p-6 space-y-6">
+            <form onSubmit={handleAddEmployee} className="flex-1 overflow-y-auto p-6 space-y-6 pb-40">
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Full Name</label>
@@ -332,6 +533,17 @@ export default function AdminEmployees() {
                     placeholder="name@company.com"
                     value={newEmployee.email}
                     onChange={(e) => setNewEmployee({...newEmployee, email: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Mobile Number</label>
+                  <input 
+                    type="tel" 
+                    className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                    placeholder="e.g. 9876543210"
+                    value={newEmployee.mobile}
+                    onChange={(e) => setNewEmployee({...newEmployee, mobile: e.target.value})}
                   />
                 </div>
 
@@ -412,9 +624,9 @@ export default function AdminEmployees() {
 
       {/* Location Modal */}
       {locationModalData && (
-        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-zinc-100 flex items-center justify-between">
+        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-zinc-100 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-black text-xl text-zinc-900">Residence Registry</h3>
                 <p className="text-xs text-zinc-500 font-medium">Home geofence for {locationModalData.name}</p>
@@ -427,7 +639,7 @@ export default function AdminEmployees() {
               </button>
             </div>
             
-            <div className="h-[400px]">
+            <div className="flex-1 overflow-y-auto pb-40">
               {locationModalData.homeLat ? (
                 <MapView 
                   center={{ lat: locationModalData.homeLat, lng: locationModalData.homeLng }}

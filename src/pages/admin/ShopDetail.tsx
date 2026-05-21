@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { 
   Store, 
   MapPin, 
@@ -12,7 +12,10 @@ import {
   ShoppingBag,
   TrendingUp,
   Package,
-  Clock
+  Clock,
+  Pencil,
+  Loader2,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '../../lib/utils';
@@ -24,6 +27,19 @@ export default function ShopDetail() {
   const [shop, setShop] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editForm, setEditForm] = useState({
+    shopName: '',
+    ownerName: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    latitude: '',
+    longitude: '',
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -32,7 +48,19 @@ export default function ShopDetail() {
         // Fetch Shop Details
         const shopDoc = await getDoc(doc(db, 'shops', id));
         if (shopDoc.exists()) {
-          setShop({ id: shopDoc.id, ...shopDoc.data() });
+          const data = shopDoc.data();
+          setShop({ id: shopDoc.id, ...data });
+          setEditForm({
+            shopName: data.shopName || '',
+            ownerName: data.ownerName || '',
+            phone: data.phone || data.ownerContact || '',
+            address: data.address || data.ownerAddress || '',
+            city: data.city || '',
+            state: data.state || '',
+            pincode: data.pincode || '',
+            latitude: data.latitude !== undefined ? String(data.latitude) : '',
+            longitude: data.longitude !== undefined ? String(data.longitude) : '',
+          });
         }
 
         // Fetch Shop Orders
@@ -51,6 +79,40 @@ export default function ShopDetail() {
     };
     fetchShopAndOrders();
   }, [id]);
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+    setIsUpdating(true);
+    try {
+      const updatedData = {
+        shopName: editForm.shopName,
+        ownerName: editForm.ownerName,
+        phone: editForm.phone,
+        ownerContact: editForm.phone,
+        address: editForm.address,
+        ownerAddress: editForm.address,
+        city: editForm.city,
+        state: editForm.state,
+        pincode: editForm.pincode,
+        latitude: editForm.latitude ? parseFloat(editForm.latitude) : (shop?.latitude || 0),
+        longitude: editForm.longitude ? parseFloat(editForm.longitude) : (shop?.longitude || 0),
+      };
+
+      await updateDoc(doc(db, 'shops', id), updatedData);
+      
+      setShop((prev: any) => ({
+        ...prev,
+        ...updatedData
+      }));
+      
+      setIsEditModalOpen(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `shops/${id}`);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -95,23 +157,30 @@ export default function ShopDetail() {
               <Store className="w-32 h-32" />
             </div>
             
-            <div className="flex items-start gap-6 relative z-10">
-              <div className="w-20 h-20 bg-zinc-100 rounded-3xl flex items-center justify-center text-zinc-400 shrink-0 border border-zinc-200">
-                <Store className="w-10 h-10" />
-              </div>
-              <div>
-                <h2 className="text-3xl font-black tracking-tight text-zinc-900">{shop.shopName}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className={cn(
-                    "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest",
-                    shop.status === 'approved' ? "bg-emerald-50 text-emerald-600" : 
-                    shop.status === 'pending' ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
-                  )}>
-                    {shop.status}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between items-stretch gap-4 relative z-10">
+              <div className="flex items-start gap-6">
+                <div className="w-20 h-20 bg-zinc-100 rounded-3xl flex items-center justify-center text-zinc-400 shrink-0 border border-zinc-200">
+                  <Store className="w-10 h-10" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-black tracking-tight text-zinc-900">{shop.shopName}</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600">
+                      Active
+                    </div>
+                    <span className="text-zinc-400 text-xs font-medium">Business Account</span>
                   </div>
-                  <span className="text-zinc-400 text-xs font-medium">Business Account</span>
                 </div>
               </div>
+              
+              <button 
+                type="button"
+                onClick={() => setIsEditModalOpen(true)}
+                className="self-start px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition-all uppercase tracking-wider flex items-center gap-2 shadow-sm shrink-0 border border-zinc-800"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Edit Details
+              </button>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-6 mt-10 relative z-10">
@@ -124,7 +193,7 @@ export default function ShopDetail() {
                 <div className="flex items-center gap-3 text-sm">
                   <Phone className="w-4 h-4 text-zinc-400" />
                   <span className="text-zinc-500">Contact:</span>
-                  <span className="font-bold text-zinc-900">{shop.ownerContact}</span>
+                  <span className="font-bold text-zinc-900">{shop.phone || shop.ownerContact || 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                    <Calendar className="w-4 h-4 text-zinc-400" />
@@ -138,7 +207,9 @@ export default function ShopDetail() {
                 <div className="flex items-center gap-3 text-sm">
                   <MapPin className="w-4 h-4 text-zinc-400" />
                   <span className="text-zinc-500">Location:</span>
-                  <span className="font-bold text-zinc-900 truncate">{shop.ownerAddress}, {shop.city}</span>
+                  <span className="font-bold text-zinc-900 truncate">
+                    {shop.address || shop.ownerAddress || 'N/A'}, {shop.city || 'N/A'}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <Clock className="w-4 h-4 text-zinc-400" />
@@ -260,6 +331,158 @@ export default function ShopDetail() {
           </div>
         </div>
       </div>
+
+      {/* Edit Shop Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-sm sm:max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-zinc-100 flex items-center justify-between shrink-0">
+              <h3 className="font-black text-xl text-zinc-900">Modify Shop Details</h3>
+              <button 
+                onClick={() => setIsEditModalOpen(false)}
+                className="p-2 hover:bg-zinc-100 rounded-full transition-colors"
+                type="button"
+              >
+                <X className="w-5 h-5 text-zinc-400" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleEditSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Shop Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                    placeholder="Enter shop name"
+                    value={editForm.shopName}
+                    onChange={(e) => setEditForm({...editForm, shopName: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Owner Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                    placeholder="Enter owner name"
+                    value={editForm.ownerName}
+                    onChange={(e) => setEditForm({...editForm, ownerName: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Contact Phone</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                    placeholder="Contact telephone"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Address</label>
+                  <textarea 
+                    required
+                    rows={2}
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all resize-none"
+                    placeholder="Enter address"
+                    value={editForm.address}
+                    onChange={(e) => setEditForm({...editForm, address: e.target.value})}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">City</label>
+                    <input 
+                      type="text" 
+                      required
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                      placeholder="e.g. Mumbai"
+                      value={editForm.city}
+                      onChange={(e) => setEditForm({...editForm, city: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">State</label>
+                    <input 
+                      type="text" 
+                      required
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                      placeholder="e.g. MH"
+                      value={editForm.state}
+                      onChange={(e) => setEditForm({...editForm, state: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Pincode</label>
+                  <input 
+                    type="text" 
+                    required
+                    maxLength={6}
+                    className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                    placeholder="6-digit pincode"
+                    value={editForm.pincode}
+                    onChange={(e) => setEditForm({...editForm, pincode: e.target.value.replace(/\D/g, '')})}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Latitude</label>
+                    <input 
+                      type="number" 
+                      step="any"
+                      required
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                      placeholder="Coordinates lat"
+                      value={editForm.latitude}
+                      onChange={(e) => setEditForm({...editForm, latitude: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Longitude</label>
+                    <input 
+                      type="number" 
+                      step="any"
+                      required
+                      className="w-full px-4 py-2 bg-zinc-50 border border-zinc-100 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium text-sm transition-all"
+                      placeholder="Coordinates lng"
+                      value={editForm.longitude}
+                      onChange={(e) => setEditForm({...editForm, longitude: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3 border-t border-zinc-100 mt-6 shrink-0 bg-white">
+                <button 
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 py-3 text-zinc-500 rounded-2xl font-bold uppercase tracking-wider text-xs hover:bg-zinc-50 active:scale-95 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isUpdating}
+                  className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

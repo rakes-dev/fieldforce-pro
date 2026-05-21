@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTracking } from '../../context/TrackingContext';
+import { useAuth } from '../../context/AuthContext';
 import { MapPin, CheckCircle2, XCircle, Navigation, Info, RefreshCw, Lock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MapView } from '../../components/MapView';
@@ -8,12 +9,17 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function EmployeeAttendance() {
   const { homeLocation, isCheckedIn, currentPosition, registerHome, checkOut, refreshLocation } = useTracking();
+  const { user } = useAuth();
   const [shops, setShops] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchShops = async () => {
+      if (!user) return;
       try {
-        const q = query(collection(db, 'shops'), where('status', '==', 'approved'));
+        const q = query(
+          collection(db, 'shops'), 
+          where('employeeId', '==', user.uid)
+        );
         const snap = await getDocs(q);
         setShops(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (error) {
@@ -21,7 +27,7 @@ export default function EmployeeAttendance() {
       }
     };
     fetchShops();
-  }, []);
+  }, [user]);
 
   const handleRegisterHome = () => {
     if (currentPosition) {

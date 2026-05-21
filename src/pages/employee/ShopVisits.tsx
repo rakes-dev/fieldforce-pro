@@ -3,7 +3,7 @@ import { db } from '../../lib/firebase';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useTracking } from '../../context/TrackingContext';
-import { Search, MapPin, Store, ChevronRight, Plus, ShoppingBag, X, Loader2 } from 'lucide-react';
+import { Search, MapPin, Store, ChevronRight, X, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 
@@ -13,60 +13,24 @@ export default function ShopVisits() {
   const [shops, setShops] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [selectedShop, setSelectedShop] = useState<any>(null);
-  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-  const [items, setItems] = useState<any[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchShops = async () => {
-      const q = query(collection(db, 'shops'), where('status', '==', 'approved'));
+      if (!user) return;
+      const q = query(
+        collection(db, 'shops'), 
+        where('employeeId', '==', user.uid)
+      );
       const snap = await getDocs(q);
       setShops(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchShops();
-  }, []);
+  }, [user]);
 
   const filteredShops = shops.filter(s => 
     s.shopName.toLowerCase().includes(search.toLowerCase()) ||
     s.city.toLowerCase().includes(search.toLowerCase())
   );
-
-  const addItem = () => {
-    setItems([...items, { productName: '', quantity: 1, price: 0 }]);
-  };
-
-  const updateItem = (index: number, field: string, value: any) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
-  };
-
-  const total = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-
-  const submitOrder = async () => {
-    if (!currentPosition || !selectedShop) return;
-    setIsSubmitting(true);
-    try {
-      await addDoc(collection(db, 'orders'), {
-        employeeId: user?.uid,
-        shopId: selectedShop.id,
-        orderTotal: total,
-        items,
-        geoLat: currentPosition.lat,
-        geoLng: currentPosition.lng,
-        timestamp: serverTimestamp(),
-        status: 'pending'
-      });
-      setIsOrderModalOpen(false);
-      setSelectedShop(null);
-      setItems([]);
-      alert("Order submitted successfully!");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -119,13 +83,13 @@ export default function ShopVisits() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedShop(null)}
-              className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/50 z-[100] backdrop-blur-sm"
             />
             <motion.div 
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              className="fixed bottom-0 left-0 right-0 bg-white z-50 rounded-t-3xl p-8 max-h-[90vh] overflow-y-auto"
+              className="fixed bottom-0 left-0 right-0 bg-white z-[105] rounded-t-3xl p-8 pb-32 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-8">
                 <h3 className="text-xl font-bold">{selectedShop.shopName}</h3>
@@ -146,99 +110,30 @@ export default function ShopVisits() {
                   <div className="bg-zinc-50 p-4 rounded-2xl space-y-2">
                     <p className="text-sm"><strong>Owner:</strong> {selectedShop.ownerName}</p>
                     <p className="text-sm"><strong>Phone:</strong> {selectedShop.phone}</p>
-                    <p className="text-sm"><strong>Category:</strong> {selectedShop.category}</p>
                   </div>
                 </div>
 
-                <div className="flex gap-4">
-                  <button 
-                    onClick={() => setIsOrderModalOpen(true)}
-                    className="flex-1 btn-primary flex items-center justify-center gap-2 py-4"
+                <div className="grid grid-cols-2 gap-3">
+                  <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${selectedShop.latitude},${selectedShop.longitude}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="py-3.5 bg-zinc-900 text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-1.5 hover:bg-zinc-800 transition-all active:scale-98 shadow-md shadow-zinc-900/10 text-center"
                   >
-                    <ShoppingBag className="w-5 h-5" />
-                    Place New Order
-                  </button>
+                    <MapPin className="w-4 h-4 shrink-0" />
+                    Navigate
+                  </a>
+                  <a 
+                    href={`tel:${selectedShop.phone}`}
+                    className="py-3.5 bg-emerald-600 text-white font-bold rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-all active:scale-98 shadow-md shadow-emerald-500/10 text-center"
+                  >
+                    <Phone className="w-4 h-4 shrink-0" />
+                    Call
+                  </a>
                 </div>
               </div>
             </motion.div>
           </>
-        )}
-      </AnimatePresence>
-
-      {/* Order Entry Modal */}
-      <AnimatePresence>
-        {isOrderModalOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-white z-[60] p-6 overflow-y-auto"
-          >
-            <div className="max-w-xl mx-auto space-y-8 pb-32">
-              <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold">New Order</h3>
-                <button onClick={() => setIsOrderModalOpen(false)} className="p-2 hover:bg-zinc-100 rounded-full text-zinc-400">
-                  <X className="w-8 h-8" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between font-bold text-zinc-500 uppercase tracking-widest text-[10px]">
-                  <span>Product</span>
-                  <span>Qty & Price</span>
-                </div>
-                
-                {items.map((item, idx) => (
-                  <div key={idx} className="flex gap-2 animate-in fade-in slide-in-from-right-2">
-                    <input 
-                      type="text" 
-                      placeholder="Product Name" 
-                      className="input-field flex-1"
-                      value={item.productName}
-                      onChange={(e) => updateItem(idx, 'productName', e.target.value)}
-                    />
-                    <input 
-                      type="number" 
-                      placeholder="Qty" 
-                      className="input-field w-20"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(idx, 'quantity', parseInt(e.target.value))}
-                    />
-                    <input 
-                      type="number" 
-                      placeholder="Price" 
-                      className="input-field w-24"
-                      value={item.price}
-                      onChange={(e) => updateItem(idx, 'price', parseFloat(e.target.value))}
-                    />
-                  </div>
-                ))}
-
-                <button 
-                  onClick={addItem}
-                  className="w-full py-4 border-2 border-dashed border-zinc-200 rounded-2xl flex items-center justify-center gap-2 text-zinc-400 hover:text-accent hover:border-accent transition-all font-bold text-sm"
-                >
-                  <Plus className="w-5 h-5" />
-                  Add Product Line
-                </button>
-              </div>
-
-              {/* Total Summary */}
-              <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-zinc-100 flex items-center justify-between gap-6 shadow-2xl">
-                <div>
-                   <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Total Amount</p>
-                   <p className="text-2xl font-bold text-zinc-900">₹{total.toLocaleString()}</p>
-                </div>
-                <button 
-                  onClick={submitOrder}
-                  disabled={isSubmitting || items.length === 0}
-                  className="flex-1 btn-primary py-4 text-base font-bold flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm Order'}
-                </button>
-              </div>
-            </div>
-          </motion.div>
         )}
       </AnimatePresence>
     </div>

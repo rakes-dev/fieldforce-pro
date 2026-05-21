@@ -27,6 +27,7 @@ export default function Layout({ portal }: { portal: 'admin' | 'employee' }) {
 
   const adminNav = [
     { label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { label: 'Attendance', path: '/admin/attendance', icon: ClipboardCheck },
     { label: 'Tracking', path: '/admin/tracking', icon: Navigation },
     { label: 'Employees', path: '/admin/employees', icon: Users },
     { label: 'Shops', path: '/admin/shops', icon: MapIcon },
@@ -144,30 +145,32 @@ export default function Layout({ portal }: { portal: 'admin' | 'employee' }) {
           </Link>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-10">
+        <div className="flex-1 overflow-y-auto p-6 md:p-10 pb-32 md:pb-10">
           <Outlet />
         </div>
 
         {/* Mobile Bottom Nav */}
-        <nav className="md:hidden h-16 bg-white border-t grid grid-cols-4 items-center">
-           {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-1 transition-all",
-                  isActive ? "text-accent" : "text-zinc-400"
-                )}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium">{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="md:hidden fixed bottom-6 left-6 right-6 z-[110]">
+          <nav className="min-h-16 bg-white/90 backdrop-blur-xl border border-slate-100 rounded-[28px] shadow-2xl shadow-slate-900/10 flex items-center justify-around px-2 overflow-hidden">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all",
+                    isActive ? "text-accent bg-accent/5" : "text-slate-400"
+                  )}
+                >
+                  <Icon className={cn("w-5 h-5", isActive && "animate-in zoom-in duration-300")} />
+                  <span className="text-[10px] font-bold tracking-tight">{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
       </main>
     </div>
   );

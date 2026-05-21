@@ -149,7 +149,7 @@ export default function EmployeeDashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="flex items-center gap-4">
             <div className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-colors",
+              "w-6 h-6 rounded-2xl flex items-center justify-center shadow-lg transition-colors",
               isCheckedIn ? "bg-emerald-500 shadow-emerald-500/20" : "bg-amber-500 shadow-amber-500/20"
             )}>
               {isCheckedIn ? <Clock className="w-6 h-6 text-white" /> : <AlertCircle className="w-6 h-6 text-white" />}
@@ -243,10 +243,10 @@ export default function EmployeeDashboard() {
       </div>
       {/* Session End Confirmation Modal */}
       {isConfirmingEnd && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-end md:items-center justify-center p-6 pb-40 md:p-6">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             className="bg-white rounded-[32px] w-full max-w-sm shadow-2xl p-8 space-y-6 text-center"
           >
             <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600 mb-2">

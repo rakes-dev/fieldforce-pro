@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
-import { collection, query, getDocs, doc, updateDoc, orderBy, where } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, orderBy, where, onSnapshot } from 'firebase/firestore';
 import { ShoppingBag, Check, X, Filter, Search, Download, Calendar, User, Store, Package, Info } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
@@ -32,17 +32,24 @@ export default function AdminOrders() {
         });
         setShops(shopMap);
 
-        // Fetch Orders
-        const q = query(collection(db, 'orders'), orderBy('timestamp', 'desc'));
-        const snap = await getDocs(q);
-        setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoading(false);
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'orders');
-      } finally {
+        handleFirestoreError(error, OperationType.LIST, 'orders_base');
         setLoading(false);
       }
     };
+
     fetchBaseData();
+
+    // Real-time listener for orders
+    const q = query(collection(db, 'orders'), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'orders');
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleStatus = async (e: React.MouseEvent, id: string, status: string) => {
@@ -183,13 +190,11 @@ export default function AdminOrders() {
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Order Detail Modal */}
+      </div>      {/* Order Detail Modal */}
       {selectedOrder && (
-        <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+        <div className="fixed inset-0 bg-zinc-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            <div className="p-6 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-zinc-900 flex items-center justify-center">
                   <ShoppingBag className="w-5 h-5 text-accent" />
@@ -206,9 +211,10 @@ export default function AdminOrders() {
                 <X className="w-5 h-5 text-zinc-400" />
               </button>
             </div>
-
-            <div className="p-8 max-h-[70vh] overflow-y-auto">
-              {/* Summary Cards */}
+            
+            <div className="flex-1 overflow-y-auto pb-40">
+              <div className="p-8">
+                {/* Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                 <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
                   <div className="flex items-center gap-2 text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
@@ -309,8 +315,9 @@ export default function AdminOrders() {
                 )}
               </div>
             </div>
+          </div>
 
-            <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between">
+          <div className="p-6 bg-zinc-50 border-t border-zinc-100 flex items-center justify-between">
               <div className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase">
                 <Info className="w-3.5 h-3.5" />
                 Actions are immutable after processing

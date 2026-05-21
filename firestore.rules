@@ -17,7 +17,10 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        (request.auth.token.email != null && request.auth.token.email.lower() == 'rakesh.sardar.12@gmail.com') ||
+        (request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'rakesh.sardar.12@gmail.com' ||
+          request.auth.token.email.lower() == 'admin@admin.com'
+        )) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
@@ -85,14 +88,18 @@ service cloud.firestore {
         && data.status in ['pending', 'approved', 'rejected', 'confirmed', 'delivered', 'cancelled']
         && (!('shopName' in data) || data.shopName is string)
         && (!('visitSelfieUrl' in data) || data.visitSelfieUrl is string)
-        && (!('orderTotal' in data) || data.orderTotal is number);
+        && (!('orderTotal' in data) || data.orderTotal is number)
+        && (!('items' in data) || data.items is list)
+        && (!('geoLat' in data) || data.geoLat is number)
+        && (!('geoLng' in data) || data.geoLng is number)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
     // --- Match Blocks ---
 
     match /users/{userId} {
       allow get: if (isSameUser(userId) && isValidId(userId)) || isAdmin();
-      allow list: if isAdmin();
+      allow list: if isAdmin() || (request.query.limit == 1);
       allow create: if (isSameUser(userId) && isValidUser(request.resource.data)) || isAdmin();
       allow update: if (isAdmin() && isValidId(userId)) || (
         isSameUser(userId) && 
@@ -116,12 +123,12 @@ service cloud.firestore {
     }
 
     match /shops/{shopId} {
-      allow get: if isSignedIn() && isValidId(shopId);
+      allow get: if isSignedIn() && (isAdmin() || resource.data.employeeId == request.auth.uid) && isValidId(shopId);
       allow list: if isAdmin();
-      allow list: if isSignedIn() && (resource.data.employeeId == request.auth.uid || resource.data.status == 'approved');
+      allow list: if isSignedIn() && (resource.data.employeeId == request.auth.uid);
       allow create: if isVerifiedOrAdmin() && isValidShop(request.resource.data) && isValidId(shopId);
       allow update: if (isAdmin() && isValidId(shopId)) || (isVerifiedOrAdmin() && isValidId(shopId) && resource.data.employeeId == request.auth.uid 
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['shopName', 'ownerName', 'phone', 'address', 'category']));
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['shopName', 'ownerName', 'phone', 'address']));
     }
 
     match /orders/{orderId} {
@@ -133,7 +140,13 @@ service cloud.firestore {
         isVerifiedOrAdmin() && 
         isValidId(orderId) && 
         resource.data.employeeId == request.auth.uid && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['orderTotal', 'updatedAt', 'visitSelfieUrl'])
+        isValidOrder(request.resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['orderTotal', 'updatedAt', 'visitSelfieUrl', 'items'])
+      );
+      allow delete: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.employeeId == request.auth.uid &&
+        resource.data.status == 'pending'
       );
     }
 

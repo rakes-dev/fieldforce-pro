@@ -11,6 +11,7 @@ import AdminEmployees from './pages/admin/Employees';
 import AdminShops from './pages/admin/Shops';
 import ShopDetail from './pages/admin/ShopDetail';
 import AdminOrders from './pages/admin/Orders';
+import AdminAttendance from './pages/admin/Attendance';
 
 import EmployeeDashboard from './pages/employee/Dashboard';
 import EmployeeAttendance from './pages/employee/Attendance';
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="shops" element={<AdminShops />} />
         <Route path="shops/:id" element={<ShopDetail />} />
         <Route path="orders" element={<AdminOrders />} />
+        <Route path="attendance" element={<AdminAttendance />} />
         <Route path="profile" element={<Profile />} />
       </Route>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
-import { collection, query, getDocs, doc, updateDoc, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, orderBy, onSnapshot } from 'firebase/firestore';
 import { Store, Check, X, ExternalLink, MapPin, Search, Filter, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -10,18 +10,17 @@ export default function AdminShops() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchShops = async () => {
-      try {
-        const q = query(collection(db, 'shops'), orderBy('createdAt', 'desc'));
-        const snap = await getDocs(q);
-        setShops(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'shops');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchShops();
+    // Real-time listener for shops
+    const q = query(collection(db, 'shops'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setShops(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'shops');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleApproval = async (id: string, approve: boolean) => {
@@ -39,16 +38,13 @@ export default function AdminShops() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Shop Registry</h2>
-          <p className="text-zinc-500">Review and approve new field shop registrations.</p>
+          <p className="text-zinc-500">Directory of registered client shops.</p>
         </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {shops.map((shop) => (
-          <div key={shop.id} className={cn(
-            "card p-6 flex flex-col gap-6 transition-all",
-            shop.status === 'pending' ? "ring-2 ring-amber-500/20 bg-amber-50/10" : ""
-          )}>
+          <div key={shop.id} className="card p-6 flex flex-col gap-6 transition-all">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-zinc-100 rounded-2xl flex items-center justify-center text-zinc-400 shrink-0">
@@ -61,12 +57,8 @@ export default function AdminShops() {
                   <p className="text-sm text-zinc-500">{shop.ownerName} • {shop.city}</p>
                 </div>
               </div>
-              <div className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
-                shop.status === 'approved' ? "bg-emerald-50 text-emerald-600" : 
-                shop.status === 'pending' ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
-              )}>
-                {shop.status}
+              <div className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-600">
+                Active
               </div>
             </div>
 
@@ -96,23 +88,6 @@ export default function AdminShops() {
                     <ChevronRight className="w-3.5 h-3.5" />
                   </Link>
                </div>
-               
-               {shop.status === 'pending' && (
-                 <div className="flex gap-2">
-                   <button 
-                     onClick={() => handleApproval(shop.id, false)}
-                     className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-all"
-                   >
-                     Reject
-                   </button>
-                   <button 
-                     onClick={() => handleApproval(shop.id, true)}
-                     className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all"
-                   >
-                     Approve Shop
-                   </button>
-                 </div>
-               )}
             </div>
           </div>
         ))}

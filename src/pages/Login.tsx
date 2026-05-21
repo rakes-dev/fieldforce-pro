@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, LogIn, Mail, Lock, User, AtSign, ArrowRight } from 'lucide-react';
+import { MapPin, LogIn, Mail, Lock, User, AtSign, ArrowRight, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { db } from '../lib/firebase';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 export default function Login() {
   const { loginWithGoogle, loginWithEmail, registerWithEmail } = useAuth();
@@ -25,7 +27,29 @@ export default function Login() {
         if (!formData.name) throw new Error("Name is required");
         await registerWithEmail(formData.email, formData.password, formData.name);
       } else {
-        await loginWithEmail(formData.email, formData.password);
+        const identifier = formData.email.trim();
+        const isMobile = !identifier.includes('@') && /^[+0-9\s-]+$/.test(identifier);
+        
+        let resolvedEmail = identifier;
+        
+        if (isMobile) {
+          const q = query(
+            collection(db, 'users'), 
+            where('mobile', '==', identifier), 
+            limit(1)
+          );
+          const snap = await getDocs(q);
+          if (snap.empty) {
+            throw new Error("No workforce profile found matching this mobile number.");
+          }
+          const userData = snap.docs[0].data();
+          if (!userData.email) {
+            throw new Error("This profile does not have a registered email mapping.");
+          }
+          resolvedEmail = userData.email;
+        }
+
+        await loginWithEmail(resolvedEmail, formData.password);
       }
     } catch (err: any) {
       setError(err.message);
@@ -97,10 +121,14 @@ export default function Login() {
             </AnimatePresence>
 
             <div className="relative group">
-              <AtSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-accent transition-colors" />
+              {(!formData.email.includes('@') && /^[+0-9\s-]+$/.test(formData.email) && formData.email.trim().length > 0) ? (
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-accent transition-colors animate-in fade-in" />
+              ) : (
+                <AtSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-accent transition-colors animate-in fade-in" />
+              )}
               <input 
-                type="email"
-                placeholder="Work Email"
+                type="text"
+                placeholder={isRegistering ? "Work Email" : "Work Email or Mobile Number"}
                 required
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}

@@ -8,6 +8,23 @@
   
   --color-brand: #0F172A;
   --color-accent: #2563EB;
+
+  @keyframes flash {
+    0% { opacity: 0.8; }
+    100% { opacity: 0; }
+  }
+}
+
+.input-minimal {
+  @apply w-full px-4 py-3 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-accent/20 focus:border-accent outline-none font-medium transition-all text-sm placeholder:text-zinc-400;
+}
+
+.label-minimal {
+  @apply text-[10px] font-black text-zinc-400 uppercase tracking-widest ml-1 mb-1.5 block;
+}
+
+.animate-flash {
+  animation: flash 0.5s ease-out forwards;
 }
 
 @layer base {
